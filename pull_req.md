@@ -34,3 +34,7 @@ def is_valid_url(url):
             print(f"Content of {targets_file} (first 10 lines):")
             print("".join(targets[:10]))
 ```
+
+# binary prereq
+
+## make cookie - and other args - as a flag from command line or outside cfg file
