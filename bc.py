@@ -1,21 +1,21 @@
+import sys
+import os
 import requests
-import yaml
 import json
 import time
-import os
 import re
 
-# Load credentials
-def load_credentials():
-    with open('./config/credentials.yaml', 'r') as file:
-        return yaml.safe_load(file)
+# Load credentials from config.json
+def load_config(config_file):
+    with open(config_file, 'r') as file:
+        return json.load(file)
 
 # Make request
 def make_request(url, headers, cookies):
-    response = requests.get(url, headers=headers, cookies=cookies)
+    response = requests.get(url, headers=headers, cookies={'cookie': cookies})
     return response
 
-# Step 1: Generate engagement URLs
+# Call 1: Generate engagement URLs
 def generate_engagement_urls(engagements):
     base_url = "https://bugcrowd.com"
     engagement_urls = []
@@ -23,7 +23,7 @@ def generate_engagement_urls(engagements):
     for engagement in engagements:
         brief_url = engagement.get('briefUrl', '')
         if brief_url:
-            full_url = f"{base_url}{brief_url}" 
+            full_url = f"{base_url}{brief_url}"
             engagement_urls.append({
                 'name': engagement.get('name'),
                 'url': full_url,
@@ -32,34 +32,7 @@ def generate_engagement_urls(engagements):
 
     return engagement_urls
 
-# This function dives into the changelog and extracts the juicy scope (target) data
-def fetch_changelog_and_extract_scope(changelog_url, headers, cookies):
-    changelog_response = make_request(changelog_url, headers, cookies)
-    if changelog_response.status_code == 200:
-        changelog_data = changelog_response.json()
-        scope_items = changelog_data['data']['scope'][0]['targets']
-        
-        targets = []
-        accepted_categories = {'website', 'api'}  # Keeping it simple with accepted categories
-        
-        for item in scope_items:
-            target_name = item.get('name')
-            target_uri = item.get('uri')
-            target_category = item.get('category')  # Snagging the category of the target
-            
-            # Prioritize URI if present, else fallback to name
-            target = target_uri if target_uri else target_name
-            
-            # Only add targets that are in the accepted categories
-            if target and target_category in accepted_categories:
-                targets.append(target)
-            
-        return targets
-    else:
-        print(f"Error fetching changelog at {changelog_url}, status code: {changelog_response.status_code}")
-        return []
-
-# This function finds the changelog URL from the engagement HTML content
+# Call 2. Extract changelog URL from the engagement HTML content
 def extract_changelog_url(engagement_url, brief_url, headers, cookies):
     engagement_response = make_request(engagement_url, headers, cookies)
     
@@ -83,26 +56,44 @@ def extract_changelog_url(engagement_url, brief_url, headers, cookies):
     else:
         print(f"Error fetching engagement HTML at {engagement_url}, status code: {engagement_response.status_code}")
         return None
+    
+# Call 3. Fetch changelog and extract scope data
+def fetch_changelog_and_extract_scope(changelog_url, headers, cookies):
+    changelog_response = make_request(changelog_url, headers, cookies)
+    if changelog_response.status_code == 200:
+        changelog_data = changelog_response.json()
+        scope_items = changelog_data['data']['scope'][0]['targets']
+        
+        targets = []
+        accepted_categories = {'website', 'api'}  # Only process website and api in scope
+        
+        for item in scope_items:
+            target_name = item.get('name')
+            target_uri = item.get('uri')
+            target_category = item.get('category')
+            
+            # Prioritize URI if present, else fallback to name
+            target = target_uri if target_uri else target_name
+            
+            if target and target_category in accepted_categories:
+                targets.append(target)
+            
+        return targets
+    else:
+        print(f"Error fetching changelog at {changelog_url}, status code: {changelog_response.status_code}")
+        return []
 
-# checks if a string is a legit URL, keeping the bad ones at bay
-def is_valid_url(url):
-    regex = re.compile(
-        r'^(?:http|ftp|wss)s?://'  # http://, https://, ftp://, wss://
-        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,20}\.?|[A-Z0-9-]{2,}\.?)|'  # Domain name with wider range of TLDs
-        r'localhost|'  # localhost...
-        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|'  # ...or IPv4
-        r'\[?[A-F0-9]*:[A-F0-9:]+\]?)'  # ...or IPv6
-        r'(?::\d+)?'  # Optional port
-        r'(?:/?|[/?]\S+)$', re.IGNORECASE)  # Optional path
-    return re.match(regex, url) is not None
-
-# Main function to fetch engagements and extract scope targets, the heart of the operation
-def main():
+# Main function to fetch engagements and extract scope targets
+def main(config):
     base_url = "https://bugcrowd.com/engagements.json?category=bug_bounty&page={}&sort_by=promoted&sort_direction=desc"
 
-    # Load cookies
-    credentials = load_credentials()
-    cookies = {'cookie': credentials['bc']['cookie']}
+    """ Main function for Bugcrowd script using the loaded config. """
+    try:
+        cookies = config['credentials']['bc']['cookie']
+
+    except KeyError as e:
+        print(f"Missing key in config: {e}")
+        return
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0',
@@ -122,7 +113,7 @@ def main():
             filename = f'engagements_{page_number}.json'
 
             if os.path.exists(filename):
-                print(f"{filename} already exists. skipping page {page_number}.")
+                print(f"{filename} already exists. Skipping page {page_number}.")
                 page_number += 1
                 continue
 
@@ -133,83 +124,10 @@ def main():
             if response.status_code == 200:
                 try:
                     data = response.json()
-                except ValueError as e:  # Catch JSON decode errors
+                except ValueError as e:
                     print(f"JSON decode error: {e}. Response text: {response.text}")
-                    break  # Exit on JSON decode error
+                    break
 
-                engagements = data.get('engagements', [])
-
-                if not engagements:  # No engagements found
-                    print(f"no more engagements found on page {page_number}. stopping.")
-                    all_targets_found = True
-                    continue
-
-                with open(filename, 'w', encoding='utf-8') as file:
-                    json.dump(data, file, indent=4)
-                print(f"response body saved to {filename}")
-
-                engagement_urls = generate_engagement_urls(engagements)
-
-                for engagement in engagement_urls:
-                    print(f"processing engagement: {engagement['name']}")
-
-                    changelog_url = extract_changelog_url(engagement['url'], engagement['brief_url'], headers, cookies)
-                    
-                    if changelog_url:  
-                        scope_targets = fetch_changelog_and_extract_scope(changelog_url, headers, cookies)
-                        
-                        for target in scope_targets:
-                            targets_file.write(target + "\n")
-                    else:
-                        print(f"failed to get changelog url for engagement: {engagement['name']}")
-
-                page_number += 1
-                time.sleep(sleep_time)
-            else:
-                print(f"error: status code {response.status_code} for page {page_number}. Response text: {response.text}")
-                all_targets_found = True
-                break
-
-    base_url = "https://bugcrowd.com/engagements.json?category=bug_bounty&page={}&sort_by=promoted&sort_direction=desc"
-
-    # Load the full cookie from the credentials.yaml file
-    credentials = load_credentials()
-    cookies = {'cookie': credentials['bc']['cookie']}
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'Referer': 'https://bugcrowd.com/engagements?category=bug_bounty&page={}&sort_by=promoted&sort_direction=desc',
-        'Connection': 'keep-alive'
-    }
-
-    page_number = 1
-    sleep_time = 0.2  # 5 req/sec
-    all_targets_found = False
-
-    # Check if targets.txt already exists
-    if os.path.exists('targets.txt'):
-        print("targets.txt already exists. Processing targets...")
-        process_targets_file('targets.txt')  # Process the existing targets
-        return  # Exit after processing existing targets
-
-    with open('targets.txt', 'w') as targets_file:
-        while not all_targets_found:
-            filename = f'engagements_{page_number}.json'
-
-            if os.path.exists(filename):
-                print(f"{filename} already exists. Skipping page {page_number}.")
-                page_number += 1
-                continue
-
-            url = base_url.format(page_number)
-            headers['Referer'] = headers['Referer'].format(page_number)
-            response = make_request(url, headers, cookies)
-
-            if response.status_code == 200:
-                data = response.json()
                 engagements = data.get('engagements', [])
 
                 if not engagements:
@@ -224,30 +142,41 @@ def main():
                 engagement_urls = generate_engagement_urls(engagements)
 
                 for engagement in engagement_urls:
-                    print(f"Processing: {engagement['name']}")
+                    print(f"Processing engagement: {engagement['name']}")
 
                     changelog_url = extract_changelog_url(engagement['url'], engagement['brief_url'], headers, cookies)
-
-                    if changelog_url:
+                    
+                    if changelog_url:  
                         scope_targets = fetch_changelog_and_extract_scope(changelog_url, headers, cookies)
-
+                        
                         for target in scope_targets:
-                            targets_file.write(target + "\n")  # Write targets to targets.txt
+                            targets_file.write(target + "\n")
                     else:
                         print(f"Failed to get changelog URL for engagement: {engagement['name']}")
 
                 page_number += 1
                 time.sleep(sleep_time)
             else:
-                print(f"Error: status code {response.status_code} for page {page_number}")
+                print(f"Error: status code {response.status_code} for page {page_number}. Response text: {response.text}")
                 all_targets_found = True
                 break
 
     # After all targets are fetched, process the targets file
     process_targets_file('targets.txt')
+    
+# Check if a string is a valid URL
+def is_valid_url(url):
+    regex = re.compile(
+        r'^(?:http|ftp|wss)s?://'  # http://, https://, ftp://, wss://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,20}\.?|[A-Z0-9-]{2,}\.?)|'  # Domain name
+        r'localhost|'  # localhost
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|'  # IPv4
+        r'\[?[A-F0-9]*:[A-F0-9:]+\]?)'  # IPv6
+        r'(?::\d+)?'  # Optional port
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)  # Optional path
+    return re.match(regex, url) is not None
 
-import os
-
+# 4. Processing complete targets.txt file to separate them into`wildcards.txt`, `domains.txt` and `invalid_urls.txt`
 def process_targets_file(targets_file):
     if not os.path.isfile(targets_file):
         print(f"Error: {targets_file} does not exist.")
@@ -258,9 +187,7 @@ def process_targets_file(targets_file):
     valid_urls = []
 
     try:
-        # Open the file with UTF-8 encoding
         with open(targets_file, 'r', encoding='utf-8') as file:
-            # Read lines from the file
             targets = file.readlines()
             print(f"Content of {targets_file} (first 10 lines):")
             print("".join(targets[:10]))  # Print the first 10 lines for review
@@ -307,149 +234,13 @@ def process_targets_file(targets_file):
         print(f"Invalid URLs saved to invalid_urls.txt ({len(invalid_urls)} found)")
 
     if valid_urls:
-        with open('domains.txt', 'w') as domains_file:
-            domains_file.write('\n'.join(valid_urls) + '\n')
-        print(f"Valid URLs saved to domains.txt ({len(valid_urls)} found)")
-    else:
-        print("No valid URLs found.")
-
-    wildcards = []
-    invalid_urls = []
-    valid_urls = []
-
-    try:
-        with open(targets_file, 'r', encoding='utf-8') as file:
-            targets = file.readlines()
-        for line in targets:
-            print(repr(line))
-
-    except Exception as e:
-        print(f"Error reading file {targets_file}: {e}")
-        return
-
-
-    for target in targets:
-        target = target.strip()
-        if not target:
-            continue
-        
-
-        if '*' in target:  # Check for wildcard
-            wildcards.append(target)
-        elif not is_valid_url(target):  # Check for valid URL
-            invalid_urls.append(target)
-        else:  # It's a valid URL
-            valid_urls.append(target)
-
-    # Writing to output files...
-    if wildcards:
-        with open('wildcards.txt', 'w') as wildcard_file:
-            wildcard_file.write('\n'.join(wildcards) + '\n')
-        print(f"Wildcards saved to wildcards.txt ({len(wildcards)} found)")
-
-    if invalid_urls:
-        with open('invalid_urls.txt', 'w') as invalid_file:
-            invalid_file.write('\n'.join(invalid_urls) + '\n')
-        print(f"Invalid URLs saved to invalid_urls.txt ({len(invalid_urls)} found)")
-
-    if valid_urls:
-        with open('domains.txt', 'w') as domains_file:
-            domains_file.write('\n'.join(valid_urls) + '\n')
-        print(f"Valid URLs saved to domains.txt ({len(valid_urls)} found)")
-    else:
-        print("No valid URLs found.")
-
-    wildcards = []
-    invalid_urls = []
-    valid_urls = []
-
-    # Try to read the file and print its contents for debugging
-    try:
-        with open(targets_file, 'r', encoding='utf-8') as file:
-            targets = file.readlines()
-
-        print(f"Raw content from {targets_file}:")  # Debugging statement
-        print(''.join(targets))  # Show the raw content
-
-    except Exception as e:
-        print(f"Error reading file {targets_file}: {e}")
-        return
-
-    print(f"Total targets read: {len(targets)}")  # Debugging statement
-
-    for target in targets:
-        target = target.strip()  # Strip whitespace
-        if not target:  # Skip empty lines
-            continue
-        
-        print(f"Processing target: {target}")  # Debugging statement
-
-        if '*' in target:  # Check for wildcard
-            wildcards.append(target)
-        elif not is_valid_url(target):  # Check for valid URL
-            invalid_urls.append(target)
-        else:  # It's a valid URL
-            valid_urls.append(target)
-
-    # Write wildcards to wildcards.txt
-    if wildcards:
-        with open('wildcards.txt', 'w') as wildcard_file:
-            wildcard_file.write('\n'.join(wildcards) + '\n')
-        print(f"Wildcards saved to wildcards.txt ({len(wildcards)} found)")
-
-    # Write invalid URLs to invalid_urls.txt
-    if invalid_urls:
-        with open('invalid_urls.txt', 'w') as invalid_file:
-            invalid_file.write('\n'.join(invalid_urls) + '\n')
-        print(f"Invalid URLs saved to invalid_urls.txt ({len(invalid_urls)} found)")
-
-    # Write valid URLs to domains.txt (excluding wildcards)
-    if valid_urls:
-        with open('domains.txt', 'w') as domains_file:
-            domains_file.write('\n'.join(valid_urls) + '\n')
-        print(f"Valid URLs saved to domains.txt ({len(valid_urls)} found)")
-    else:
-        print("No valid URLs found.")
-
-    wildcards = []
-    invalid_urls = []
-    valid_urls = []
-    
-    with open(targets_file, 'r') as file:
-        targets = file.readlines()
-
-    print(f"Total targets read: {len(targets)}")  # Debugging statement
-
-    for target in targets:
-        target = target.strip()
-        print(f"Processing target: {target}")  # Debugging statement
-
-        if '*' in target:  # Check for wildcard
-            wildcards.append(target)
-        elif not is_valid_url(target):  # Check for valid URL
-            invalid_urls.append(target)
-        else:  # It's a valid URL
-            valid_urls.append(target)
-
-    # Write wildcards to wildcards.txt
-    if wildcards:
-        with open('wildcards.txt', 'w') as wildcard_file:
-            wildcard_file.write('\n'.join(wildcards) + '\n')
-        print(f"Wildcards saved to wildcards.txt ({len(wildcards)} found)")
-
-    # Write invalid URLs to invalid_urls.txt
-    if invalid_urls:
-        with open('invalid_urls.txt', 'w') as invalid_file:
-            invalid_file.write('\n'.join(invalid_urls) + '\n')
-        print(f"Invalid URLs saved to invalid_urls.txt ({len(invalid_urls)} found)")
-
-    # Write valid URLs to domains.txt (excluding wildcards)
-    if valid_urls:
-        with open('domains.txt', 'w') as domains_file:
-            domains_file.write('\n'.join(valid_urls) + '\n')
-        print(f"Valid URLs saved to domains.txt ({len(valid_urls)} found)")
-    else:
-        print("No valid URLs found.")
+        with open('valid_urls.txt', 'w') as valid_file:
+            valid_file.write('\n'.join(valid_urls) + '\n')
+        print(f"Valid URLs saved to valid_urls.txt ({len(valid_urls)} found)")
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        print("Please provide the config file.")
+        sys.exit(1)
+    config = load_config(sys.argv[1])
+    main(config)
