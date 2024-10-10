@@ -11,10 +11,13 @@ def load_config(config_file):
 def main():
     # Command-line arguments
     parser = argparse.ArgumentParser(description="Run scripts for programs.")
-    parser.add_argument('--bc', action='store_true', help='Run Bc script')
+    parser.add_argument('--bc', action='store_true', help='Run BC script')
     parser.add_argument('--ywh', action='store_true', help='Run YWH script')
     parser.add_argument('--h1', action='store_true', help='Run H1 script')
     parser.add_argument('--config', '-C', type=str, required=True, help='JSON config file')
+    parser.add_argument('--targets_file', type=str, default='targets.txt', help='Output file for targets')
+    parser.add_argument('--domains_file', type=str, default='domains.txt', help='Output file for domains')
+    parser.add_argument('--invalid_urls_file', type=str, default='invalid_urls.txt', help='Output file for invalid URLs')
 
     args = parser.parse_args()
 
@@ -26,7 +29,7 @@ def main():
 
     if args.bc:
         print("Running BC script with config...")
-        bc.main(config)
+        bc.main(config, args.targets_file, args.domains_file, args.invalid_urls_file)
 
     if args.ywh:
         print("Running YWH script with config...")
