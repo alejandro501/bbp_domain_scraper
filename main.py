@@ -52,6 +52,7 @@ def main():
     url_post_digest.clean_wildcards(args.wildcards_file, args.domains_file)
     url_post_digest.clean_invalid_urls(args.invalid_urls_file, args.domains_file)
     url_post_digest.add_https_to_domains(args.domains_file)
+    url_post_digest.remove_duplicate_domains(args.domains_file)
 
 if __name__ == "__main__":
     main()
