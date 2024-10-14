@@ -32,21 +32,21 @@ def main():
         if os.path.exists(args.targets_file) or os.path.exists(args.domains_file) or os.path.exists(args.invalid_urls_file):
             print(f"Skipping BC script execution; output files already exist: {args.targets_file}, {args.domains_file}, {args.invalid_urls_file}")
         else:
-            print("Running BC script with config...")
+            print("Running BC script...")
             bc.main(config, args.targets_file, args.domains_file, args.invalid_urls_file)
 
     if args.ywh:
         if os.path.exists(args.domains_file):
             print("Skipping YWH script execution; output file already exists.")
         else:
-            print("Running YWH script with config...")
+            print("Running YWH script...")
             # ywh.main(config)  # Uncomment when ywh.py is available
 
     if args.h1:
         if os.path.exists(args.domains_file):
             print("Skipping H1 script execution; output file already exists.")
         else:
-            print("Running H1 script with config...")
+            print("Running H1 script...")
             # h1.main(config)  # Uncomment when h1.py is available
 
     url_post_digest.clean_wildcards(args.wildcards_file, args.domains_file)
