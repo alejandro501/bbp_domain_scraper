@@ -4,13 +4,11 @@ import sys
 
 def load_config(config_file):
     """Load JSON configuration from a file."""
-    print(f"Loading configuration from {config_file}")
     with open(config_file, 'r') as file:
         return json.load(file)
 
 def make_request(url, headers, json_data=None):
     """Make a request to the specified URL with optional JSON data."""
-    print(f"Making request to {url} with headers {headers}")
     try:
         if json_data:
             response = requests.post(url, headers=headers, json=json_data)
@@ -102,6 +100,137 @@ def fetch_opportunities_with_sort_direction(api_url, headers, sort_field, sort_d
         print("Unexpected response format:", response)
         sys.exit(1)
 
+def fetch_identifiers_for_handle(api_url, headers, handle):
+    """Fetch identifiers for a given handle using PolicySearchStructuredScopesQuery."""
+    print(f"Fetching identifiers for handle: {handle}")
+    
+    # Query structure
+    query = {
+        "operationName": "PolicySearchStructuredScopesQuery",
+        "variables": {
+            "handle": handle,
+            "searchString": "",
+            "eligibleForSubmission": None,
+            "eligibleForBounty": None,
+            "asmTagIds": [],
+            "assetTypes": [],
+            "from": 0,
+            "size": 100,
+            "sort": {"field": "cvss_score", "direction": "DESC"},
+            "product_area": "h1_assets",
+            "product_feature": "policy_scopes"
+        },
+        "query": """
+        query PolicySearchStructuredScopesQuery(
+            $handle: String!,
+            $searchString: String,
+            $eligibleForSubmission: Boolean,
+            $eligibleForBounty: Boolean,
+            $minSeverityScore: SeverityRatingEnum,
+            $asmTagIds: [Int],
+            $assetTypes: [StructuredScopeAssetTypeEnum!],
+            $from: Int,
+            $size: Int,
+            $sort: SortInput
+        ) {
+          team(handle: $handle) {
+            id
+            team_display_options {
+              show_total_reports_per_asset
+              __typename
+            }
+            structured_scopes_search(
+              search_string: $searchString
+              eligible_for_submission: $eligibleForSubmission
+              eligible_for_bounty: $eligibleForBounty
+              min_severity_score: $minSeverityScore
+              asm_tag_ids: $asmTagIds
+              asset_types: $assetTypes
+              from: $from
+              size: $size
+              sort: $sort
+            ) {
+              nodes {
+                ... on StructuredScopeDocument {  # Correct type name
+                  id
+                  ...PolicyScopeStructuredScopeDocument
+                  __typename
+                }
+                __typename
+              }
+              pageInfo {
+                startCursor
+                hasPreviousPage
+                endCursor
+                hasNextPage
+                __typename
+              }
+              total_count
+              __typename
+            }
+            __typename
+          }
+        }
+
+        fragment PolicyScopeStructuredScopeDocument on StructuredScopeDocument {
+          id
+          identifier
+          display_name
+          instruction
+          cvss_score
+          eligible_for_bounty
+          eligible_for_submission
+          asm_system_tags
+          created_at
+          updated_at
+          total_resolved_reports
+          attachments {
+            id
+            file_name
+            file_size
+            content_type
+            expiring_url
+            __typename
+          }
+          __typename
+        }
+        """
+    }
+
+    # Make the request
+    response = make_request(api_url, headers, query)
+
+    # Handling the response
+    if 'data' in response and 'team' in response['data']:
+        return response['data']['team']['structured_scopes_search']['nodes']
+    else:
+        print(f"Unexpected response format for handle {handle}: {response}")
+        return []
+
+def collect_identifiers_from_targets(api_url, headers, targets_file='targets.txt', wildcards_file='wildcards.txt', domains_file='domains.txt'):
+    """Collect identifiers from handles in targets.txt and save them into wildcards.txt and domains.txt."""
+    with open(targets_file, 'r') as f:
+        handles = f.read().splitlines()
+
+    wildcards = []
+    domains = []
+
+    for handle in handles:
+        identifiers = fetch_identifiers_for_handle(api_url, headers, handle)
+        for identifier in identifiers:
+            if identifier.get('identifier'):
+                wildcards.append(identifier['identifier'])
+                domains.append(identifier['display_name'])
+
+    # Save results to files
+    with open(wildcards_file, 'w') as f:
+        f.write('\n'.join(wildcards) + '\n')
+    print(f"Wildcards saved to {wildcards_file} ({len(wildcards)} collected)")
+
+    with open(domains_file, 'w') as f:
+        f.write('\n'.join(domains) + '\n')
+    print(f"Domains saved to {domains_file} ({len(domains)} collected)")
+
 def fetch_opportunities_sort_desc(api_url, headers):
     """Fetch opportunities in descending order based on launched_at."""
     return fetch_opportunities_with_sort_direction(api_url, headers, sort_field='launched_at', sort_direction='DESC')
@@ -161,102 +290,16 @@ def main(config, targets_file='targets.txt', wildcards_file='wildcards.txt', dom
     opportunities_data_desc = fetch_opportunities_sort_desc(graphql_url, headers)
     handles_desc = []
     for opportunity in opportunities_data_desc['opportunities_search']['nodes']:
-        handle = opportunity.get('handle')
-        if handle:
-            handles_desc.append(handle)
-            print(f"Collected handle (DESC): {handle}")
+        handles_desc.append(opportunity['handle'])
 
-    if handles_desc:
-        with open(targets_file, 'w') as f:
-            f.write('\n'.join(handles_desc) + '\n')
-        print(f"Handles saved to {targets_file} (DESC) ({len(handles_desc)} collected)")
-    else:
-        print("No handles collected in DESC order.")
+    # Collect identifiers for descending order
+    collect_identifiers_from_targets(graphql_url, headers, targets_file=targets_file, wildcards_file=wildcards_file, domains_file=domains_file)
 
-    # Fetch opportunities in ascending order (launched_at)
-    opportunities_data_asc = fetch_opportunities_sort_asc(graphql_url, headers)
-    handles_asc = []
-    for opportunity in opportunities_data_asc['opportunities_search']['nodes']:
-        handle = opportunity.get('handle')
-        if handle:
-            handles_asc.append(handle)
-            print(f"Collected handle (ASC): {handle}")
-
-    if handles_asc:
-        with open(targets_file, 'a') as f:
-            f.write('\n'.join(handles_asc) + '\n')
-        print(f"Handles saved to {targets_file} (ASC) ({len(handles_asc)} collected)")
-    else:
-        print("No handles collected in ASC order.")
-
-    # Fetch opportunities in descending order (minimum_bounty_table_value)
-    opportunities_data_bounty_desc = fetch_opportunities_sort_bounty_desc(graphql_url, headers)
-    handles_bounty_desc = []
-    for opportunity in opportunities_data_bounty_desc['opportunities_search']['nodes']:
-        handle = opportunity.get('handle')
-        if handle:
-            handles_bounty_desc.append(handle)
-            print(f"Collected handle (Bounty DESC): {handle}")
-
-    if handles_bounty_desc:
-        with open(targets_file, 'a') as f:
-            f.write('\n'.join(handles_bounty_desc) + '\n')
-        print(f"Handles saved to {targets_file} (Bounty DESC) ({len(handles_bounty_desc)} collected)")
-    else:
-        print("No handles collected in Bounty DESC order.")
-
-    # Fetch opportunities in ascending order (minimum_bounty_table_value)
-    opportunities_data_bounty_asc = fetch_opportunities_sort_bounty_asc(graphql_url, headers)
-    handles_bounty_asc = []
-    for opportunity in opportunities_data_bounty_asc['opportunities_search']['nodes']:
-        handle = opportunity.get('handle')
-        if handle:
-            handles_bounty_asc.append(handle)
-            print(f"Collected handle (Bounty ASC): {handle}")
-
-    if handles_bounty_asc:
-        with open(targets_file, 'a') as f:
-            f.write('\n'.join(handles_bounty_asc) + '\n')
-        print(f"Handles saved to {targets_file} (Bounty ASC) ({len(handles_bounty_asc)} collected)")
-    else:
-        print("No handles collected in Bounty ASC order.")
-
-    # Fetch opportunities in descending order (resolved_report_count)
-    opportunities_data_resolved_count_desc = fetch_opportunities_sort_resolved_count_desc(graphql_url, headers)
-    handles_resolved_count_desc = []
-    for opportunity in opportunities_data_resolved_count_desc['opportunities_search']['nodes']:
-        handle = opportunity.get('handle')
-        if handle:
-            handles_resolved_count_desc.append(handle)
-            print(f"Collected handle (Resolved Count DESC): {handle}")
-
-    if handles_resolved_count_desc:
-        with open(targets_file, 'a') as f:
-            f.write('\n'.join(handles_resolved_count_desc) + '\n')
-        print(f"Handles saved to {targets_file} (Resolved Count DESC) ({len(handles_resolved_count_desc)} collected)")
-    else:
-        print("No handles collected in Resolved Count DESC order.")
-
-    # Fetch opportunities in ascending order (resolved_report_count)
-    opportunities_data_resolved_count_asc = fetch_opportunities_sort_resolved_count_asc(graphql_url, headers)
-    handles_resolved_count_asc = []
-    for opportunity in opportunities_data_resolved_count_asc['opportunities_search']['nodes']:
-        handle = opportunity.get('handle')
-        if handle:
-            handles_resolved_count_asc.append(handle)
-            print(f"Collected handle (Resolved Count ASC): {handle}")
-
-    if handles_resolved_count_asc:
-        with open(targets_file, 'a') as f:
-            f.write('\n'.join(handles_resolved_count_asc) + '\n')
-        print(f"Handles saved to {targets_file} (Resolved Count ASC) ({len(handles_resolved_count_asc)} collected)")
-    else:
-        print("No handles collected in Resolved Count ASC order.")
-
-    # Remove duplicates from the targets file
-    remove_duplicates(targets_file)
+    # Optionally remove duplicates
+    remove_duplicates(wildcards_file)
+    remove_duplicates(domains_file)
 
 if __name__ == "__main__":
-    config_file = 'config.json'
-    config = load_config(config_file)
+    config_file_path = 'config.json'
+    config = load_config(config_file_path)
     main(config)
