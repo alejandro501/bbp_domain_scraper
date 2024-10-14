@@ -2,6 +2,12 @@
   "credentials": {
     "bc": {
       "cookie": "full_cookie"
+    },
+    "h1": {
+      "cookie": "full_cookie"
     }
   }
 }
+
+
+

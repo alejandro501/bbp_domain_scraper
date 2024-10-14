@@ -1,0 +1,55 @@
+{
+    "data": {
+        "team": {
+            "id": "Z2lkOi8vaGFja2Vyb25lL0VuZ2FnZW1lbnRzOjpCdWdCb3VudHlQcm9ncmFtLzE5Mw==",
+            "team_display_options": {
+                "show_total_reports_per_asset": true,
+                "__typename": "TeamDisplayOptions"
+            },
+            "structured_scopes_search": {
+                "nodes": [
+                    {
+                        "id": "Z2lkOi8vaGFja2Vyb25lL1N0cnVjdHVyZWRTY29wZXNJbmRleC84NTg5MQ==",
+                        "identifier": "com.bitso.alpha",
+                        "display_name": "AndroidPlayStore",
+                        "instruction": "",
+                        "cvss_score": "critical",
+                        "eligible_for_bounty": true,
+                        "eligible_for_submission": true,
+                        "asm_system_tags": [],
+                        "created_at": "2021-10-29T15:28:19.986Z",
+                        "updated_at": "2021-10-29T15:28:20.011Z",
+                        "total_resolved_reports": 0,
+                        "attachments": [],
+                        "__typename": "StructuredScopeDocument"
+                    },
+                    {
+                        "id": "Z2lkOi8vaGFja2Vyb25lL1N0cnVjdHVyZWRTY29wZXNJbmRleC84NTg5Mg==",
+                        "identifier": "1539469172",
+                        "display_name": "IosAppStore",
+                        "instruction": "",
+                        "cvss_score": "critical",
+                        "eligible_for_bounty": true,
+                        "eligible_for_submission": true,
+                        "asm_system_tags": [],
+                        "created_at": "2021-10-29T15:32:07.951Z",
+                        "updated_at": "2021-10-29T15:32:07.975Z",
+                        "total_resolved_reports": 0,
+                        "attachments": [],
+                        "__typename": "StructuredScopeDocument"
+                    }
+                ],
+                "pageInfo": {
+                    "startCursor": "MQ",
+                    "hasPreviousPage": false,
+                    "endCursor": "MzI",
+                    "hasNextPage": false,
+                    "__typename": "PageInfo"
+                },
+                "total_count": 32,
+                "__typename": "SearchResultConnection"
+            },
+            "__typename": "Team"
+        }
+    }
+}

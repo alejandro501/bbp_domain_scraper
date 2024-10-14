@@ -197,10 +197,8 @@ def fetch_identifiers_for_handle(api_url, headers, handle):
         """
     }
 
-    # Make the request
     response = make_request(api_url, headers, query)
 
-    # Handling the response
     if 'data' in response and 'team' in response['data']:
         return response['data']['team']['structured_scopes_search']['nodes']
     else:
@@ -217,11 +215,14 @@ def collect_identifiers_from_targets(api_url, headers, targets_file='targets.txt
 
     for handle in handles:
         identifiers = fetch_identifiers_for_handle(api_url, headers, handle)
-        for identifier in identifiers:
-            if identifier.get('identifier'):
-                wildcards.append(identifier['identifier'])
-                domains.append(identifier['display_name'])
-
+        for item in identifiers:
+            identifier = item.get('identifier')
+            if identifier:             
+                if item['display_name'] in ["Domain", "Url"]:
+                    domains.append(identifier)
+                elif item['display_name'] == "Wildcard":
+                    wildcards.append(identifier)
+                
     # Save results to files
     with open(wildcards_file, 'w') as f:
         f.write('\n'.join(wildcards) + '\n')

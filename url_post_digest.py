@@ -41,6 +41,10 @@ def clean_wildcards(wildcards_file, domains_file):
 
 def clean_invalid_urls(invalid_urls_file, domains_file):
     """Cleans invalid URLs, adds https if needed, and appends them to domains."""
+    if not os.path.isfile(invalid_urls_file):
+        print(f"{invalid_urls_file} does not exist. Skipping...")
+        return  # Skip processing if the file doesn't exist
+    
     backup_original_file(invalid_urls_file, 'invalid_urls_original.txt')
     domains = []
     with open(invalid_urls_file, 'r') as f:
@@ -83,6 +87,7 @@ def remove_duplicate_domains(domains_file):
 
 if __name__ == "__main__":
     clean_wildcards('path/to/wildcards.txt', 'path/to/domains.txt')
-    clean_invalid_urls('path/to/invalid_urls.txt', 'path/to/domains.txt')
+    if os.path.isfile('path/to/invalid_urls.txt'):
+        clean_invalid_urls('path/to/domains.txt')
     add_https_to_domains('path/to/domains.txt')
     remove_duplicate_domains('path/to/domains.txt')
