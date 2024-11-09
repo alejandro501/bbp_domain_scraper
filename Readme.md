@@ -1,6 +1,9 @@
-# Engagements Fetcher Script
+# Bug Bounty Domain Scraper
 
-This Python script fetches bug bounty engagement data from Bugcrowd and extracts relevant scope targets from their changelogs.
+This tool fetches bug bounty program scope data from Bugcrowd and HackerOne and extracts all scope targets.
+
+## Fork ideas
+- Feel free to integrate the flow into other popular or not so popular bug bounty platforms too.
 
 ## Features
 
@@ -17,11 +20,12 @@ Before running the script, ensure you have the following installed:
 - Required Python packages:
   - `requests`
   - `PyYAML`
+  - `beautifulsoup4`
 
 You can install the required packages using pip:
 
 ```bash
-pip install requests pyyaml
+pip install -r requirements.txt
 ```
 
 ## Configuration
@@ -30,35 +34,77 @@ pip install requests pyyaml
 
 - Add your credentials in the following format:
 
-  ```yaml
-  bc:
-    cookie: "YOUR_COOKIE_HERE"
-  ```
+```json
+{
+  "credentials": {
+    "bc": {
+      "cookie": "full_cookie"
+    },
+    "h1": {
+      "cookie": "full_cookie"
+    }
+  },
+  "webhooks": {
+      "discord": {
+          "general_vps_output": "https://discordapp.com/api/webhooks/channel/id"
+      }
+  }
+}
+```
 
 ## Usage
 
-- Run the script using Python:
-
   ```bash
-  python main.py
+usage: main.py [-h] [--bc] [--ywh] [--h1] --config CONFIG [--targets_file TARGETS_FILE] [--wildcards_file WILDCARDS_FILE] [--domains_file DOMAINS_FILE] [--invalid_urls_file INVALID_URLS_FILE]
+
+Run scripts for programs.
+
+options:
+  -h, --help            show this help message and exit
+  --bc                  Run BC script
+  --ywh                 Run YWH script
+  --h1                  Run H1 script
+  --config CONFIG, -C CONFIG
+                        JSON config file
+  --targets_file TARGETS_FILE
+                        Output file for targets
+  --wildcards_file WILDCARDS_FILE
+                        Wildcards file
+  --domains_file DOMAINS_FILE
+                        Output file for domains
+  --invalid_urls_file INVALID_URLS_FILE
+                        Output file for invalid URLs
   ```
 
   The script will create the following output files:
-  targets.txt: Contains valid target URLs.
-  wildcards.txt: Contains wildcard entries.
-  invalid_urls.txt: Contains invalid URLs.
-  domains.txt: Contains valid domains.
+  targets.txt:      valid target URLs.
+  wildcards.txt:    wildcard entries.
+  invalid_urls.txt: invalid URLs.
+  domains.txt:      valid domains.
 
-## Script Overview
+## Scripts Overview
 
-### The script performs the following steps
+### Bugcrowd
 
-- Loads credentials from the credentials.yaml file.
-- Fetches engagements from the Bugcrowd API.
-- Extracts changelog URLs for each engagement.
-- Retrieves scope targets from the changelogs.
-- Validates and categorizes the targets.
-- Saves the categorized URLs to separate files.
+- Loads credentials from config.json.
+- Fetches engagement data from the Bugcrowd website.
+- Generates URLs for each engagement.
+- Extracts the changelog URL for each engagement.
+- Fetches the changelog data and extracts scope targets.
+- Validates whether each target is a valid URL.
+- Categorizes the targets into valid URLs, invalid URLs, and wildcards.
+- Saves the categorized URLs to separate files: domains.txt, invalid_urls.txt, and wildcards.txt.
+
+### HackerOne
+
+- Loads credentials from config.json.
+- Makes requests to the HackerOne API using GraphQL to fetch opportunities and identifiers.
+- Fetches opportunities from HackerOne API, with sorting options like launched_at or minimum_bounty_table_value.
+- Fetches identifiers (wildcards and domains) for handles listed in targets.txt.
+- Categorizes the identifiers into wildcards and domains based on the display name.
+- Saves wildcards and domains into wildcards.txt and domains.txt, respectively.
+- Removes duplicates from the result files (wildcards.txt, domains.txt).
+- Optionally handles different sorting strategies for fetching opportunities, such as ascending/descending order of launch date or bounty amount.
 
 ## Customization
 

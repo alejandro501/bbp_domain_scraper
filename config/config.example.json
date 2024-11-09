@@ -6,8 +6,10 @@
     "h1": {
       "cookie": "full_cookie"
     }
+  },
+  "webhooks": {
+      "discord": {
+          "general_vps_output": "https://discordapp.com/api/webhooks/channel/id"
+      }
   }
 }
-
-
-
