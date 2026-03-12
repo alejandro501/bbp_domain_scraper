@@ -1,2 +1,27 @@
-# py
-__pypcache__
+# Python cache/artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets
+.env
+.env.*
+!.env.example
+config/*.local.json
+
+# Generated output
+targets.txt
+wildcards.txt
+domains.txt
+invalid_urls.txt
+engagements_*.json
+domain_trash/
+
+# OS/editor
+.DS_Store
