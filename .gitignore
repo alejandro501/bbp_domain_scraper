@@ -16,12 +16,7 @@ venv/
 config/*.local.json
 
 # Generated output
-targets.txt
-wildcards.txt
-domains.txt
-invalid_urls.txt
-engagements_*.json
-domain_trash/
+data/
 
 # OS/editor
 .DS_Store

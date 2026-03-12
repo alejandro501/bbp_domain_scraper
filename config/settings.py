@@ -30,9 +30,9 @@ def load_runtime_config() -> dict:
     """Build runtime config from environment variables only."""
     return {
         "credentials": {
-            "bc": {"cookie": os.getenv("BC_COOKIE")},
-            "h1": {"cookie": os.getenv("H1_COOKIE")},
-            "ywh": {"pat": os.getenv("YWH_PAT")},
+            "bc": {"token": os.getenv("BC_TOKEN") or os.getenv("BC_COOKIE")},
+            "h1": {"token": os.getenv("H1_TOKEN") or os.getenv("H1_COOKIE")},
+            "ywh": {"token": os.getenv("YWH_TOKEN") or os.getenv("YWH_PAT")},
         },
         "webhooks": {
             "discord": {"general_vps_output": os.getenv("DISCORD_GENERAL_VPS_OUTPUT_WEBHOOK")},

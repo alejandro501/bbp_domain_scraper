@@ -12,7 +12,8 @@ def backup_original_file(original_file, trash_filename):
     if not os.path.isfile(original_file):
         return
 
-    trash_dir = "domain_trash"
+    base_dir = os.path.dirname(original_file) or "."
+    trash_dir = os.path.join(base_dir, "domain_trash")
     create_trash_dir(trash_dir)
     original_trash_path = os.path.join(trash_dir, trash_filename)
 
